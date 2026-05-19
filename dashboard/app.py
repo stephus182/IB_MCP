@@ -6,8 +6,8 @@ Either panel expandable to full-screen via ⤢ button or F key.
 """
 import streamlit as st
 
-from dashboard.components.chat import render_chat
-from dashboard.components.tradingview import tradingview_chart
+from components.chat import render_chat
+from components.tradingview import tradingview_chart
 
 st.set_page_config(
     page_title="IBKR Research",

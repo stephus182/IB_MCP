@@ -1,6 +1,6 @@
 import requests
 import urllib3
-from dashboard.config import MCP_BASE_URL
+from config import MCP_BASE_URL
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 

@@ -12,9 +12,9 @@ Then open **https://localhost:5055** in your browser and authenticate with your 
 
 ### 2. Start the dashboard
 ```bash
-cd dashboard
-pip install -r requirements.txt
-streamlit run app.py
+# From repo root — must be run from here, not from inside dashboard/
+pip install -r dashboard/requirements.txt
+streamlit run dashboard/app.py
 ```
 Open **http://localhost:8501**.
 

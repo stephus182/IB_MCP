@@ -17,7 +17,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
 
-from dashboard.config import (
+from config import (
     GDRIVE_CREDENTIALS_FILE,
     GDRIVE_SCOPES,
     GDRIVE_TOKEN_FILE,

@@ -14,8 +14,8 @@ import anthropic
 import pandas as pd
 import streamlit as st
 
-from dashboard.config import ANTHROPIC_MODEL, ANTHROPIC_API_KEY
-from dashboard.tools import backtest, gdrive_cache, ibkr_client
+from config import ANTHROPIC_MODEL, ANTHROPIC_API_KEY
+from tools import backtest, gdrive_cache, ibkr_client
 
 _client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 

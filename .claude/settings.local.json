@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(find /Users/steph/.claude/plugins/cache/superpowers-marketplace -name \"start-server.sh\" 2>/dev/null | head -5)",
+      "Read(//Users/steph/.claude/plugins/cache/superpowers-marketplace/**)",
+      "Bash(bash /Users/steph/.claude/plugins/cache/superpowers-marketplace/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh --project-dir /Users/steph/Claude_Projects/IBKR_mcp)"
+    ]
+  }
+}
