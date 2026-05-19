@@ -176,6 +176,14 @@ cython_debug/
 # macOS system files
 .DS_Store
 
+# Dashboard cache and credentials
+*.parquet
+dashboard/credentials.json
+dashboard/token.json
+
+# Superpowers brainstorming
+.superpowers/
+
 #
 api-docs.json
 openapi.json
