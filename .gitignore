@@ -179,6 +179,7 @@ cython_debug/
 # Dashboard cache and credentials
 *.parquet
 dashboard/credentials.json
+dashboard/credential.json
 dashboard/token.json
 
 # Superpowers brainstorming

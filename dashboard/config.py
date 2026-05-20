@@ -13,5 +13,5 @@ MCP_BASE_URL = (
 ANTHROPIC_MODEL = "claude-sonnet-4-6"
 
 GDRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
-GDRIVE_CREDENTIALS_FILE = Path(__file__).parent / "credentials.json"
+GDRIVE_CREDENTIALS_FILE = Path(__file__).parent / "credential.json"
 GDRIVE_TOKEN_FILE = Path(__file__).parent / "token.json"
