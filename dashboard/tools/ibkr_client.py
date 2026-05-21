@@ -8,6 +8,26 @@ _session = requests.Session()
 _session.verify = False  # gateway uses self-signed cert
 
 
+def _load_chrome_cookies():
+    """Inject Chrome's authenticated IBKR session cookies into the shared session."""
+    try:
+        import browser_cookie3
+        jar = browser_cookie3.chrome(domain_name="localhost")
+        loaded = 0
+        for c in jar:
+            # Only use cookies that were set for the API path (not static assets)
+            if c.path.startswith("/v1/api") or c.path == "/":
+                _session.cookies.set(c.name, c.value, domain="localhost")
+                loaded += 1
+        return loaded
+    except Exception:
+        return 0
+
+
+# Load cookies on module import
+_load_chrome_cookies()
+
+
 def _get(path: str, params: dict = None) -> dict:
     resp = _session.get(f"{IBKR_GATEWAY_URL}{path}", params=params, timeout=30)
     resp.raise_for_status()
@@ -26,12 +46,6 @@ def get_market_data_history(
     bar: str = "1d",
     outside_rth: bool = False,
 ) -> dict:
-    """
-    Fetch OHLCV history for a contract.
-
-    period: e.g. '1Y', '6M', '3M', '1W'
-    bar:    e.g. '1d', '1h', '30min', '5min', '1min'
-    """
     return _get(
         "/iserver/marketdata/history",
         {
@@ -55,7 +69,7 @@ def get_market_snapshot(conids: list[int], fields: list[str] = None) -> list[dic
 def ping() -> bool:
     """Check: is the IBKR gateway reachable and session active?"""
     try:
-        # auth/status returns 200 + JSON when logged in, 401 when not
+        _load_chrome_cookies()
         resp = _session.get(f"{IBKR_GATEWAY_URL}/iserver/auth/status", timeout=5)
         if resp.status_code == 401:
             return False
