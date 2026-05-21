@@ -7,8 +7,8 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
 GOOGLE_DRIVE_FOLDER_ID = os.environ["GOOGLE_DRIVE_FOLDER_ID"]
 
-MCP_BASE_URL = (
-    f"http://localhost:{os.getenv('MCP_SERVER_PORT', '5002')}"
+IBKR_GATEWAY_URL = (
+    f"https://localhost:{os.getenv('GATEWAY_PORT', '5055')}/v1/api"
 )
 ANTHROPIC_MODEL = "claude-sonnet-4-6"
 

@@ -1,15 +1,15 @@
 import requests
 import urllib3
-from config import MCP_BASE_URL
+from config import IBKR_GATEWAY_URL
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 _session = requests.Session()
-_session.verify = False  # IBKR gateway uses self-signed cert
+_session.verify = False  # gateway uses self-signed cert
 
 
 def _get(path: str, params: dict = None) -> dict:
-    resp = _session.get(f"{MCP_BASE_URL}{path}", params=params, timeout=30)
+    resp = _session.get(f"{IBKR_GATEWAY_URL}{path}", params=params, timeout=30)
     resp.raise_for_status()
     return resp.json()
 
@@ -53,21 +53,16 @@ def get_market_snapshot(conids: list[int], fields: list[str] = None) -> list[dic
 
 
 def ping() -> bool:
-    """Lightweight check: is the MCP server reachable and IBKR session active?"""
+    """Check: is the IBKR gateway reachable and session active?"""
     try:
-        # /portfolio/accounts is the lightest authenticated endpoint
-        result = _get("/portfolio/accounts")
-        return isinstance(result, list) and len(result) > 0
-    except Exception:
-        # Try tickle as a fallback — just checks if gateway is alive
-        try:
-            resp = _session.get(
-                "https://localhost:5055/v1/api/tickle",
-                timeout=5,
-            )
-            return resp.status_code == 200
-        except Exception:
+        resp = _session.post(f"{IBKR_GATEWAY_URL}/tickle", timeout=5)
+        if resp.status_code != 200:
             return False
+        data = resp.json()
+        # iserver.authStatus.authenticated == True means session is live
+        return data.get("iserver", {}).get("authStatus", {}).get("authenticated", False)
+    except Exception:
+        return False
 
 
 def get_accounts() -> list[dict]:
