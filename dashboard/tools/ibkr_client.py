@@ -52,6 +52,24 @@ def get_market_snapshot(conids: list[int], fields: list[str] = None) -> list[dic
     )
 
 
+def ping() -> bool:
+    """Lightweight check: is the MCP server reachable and IBKR session active?"""
+    try:
+        # /portfolio/accounts is the lightest authenticated endpoint
+        result = _get("/portfolio/accounts")
+        return isinstance(result, list) and len(result) > 0
+    except Exception:
+        # Try tickle as a fallback — just checks if gateway is alive
+        try:
+            resp = _session.get(
+                "https://localhost:5055/v1/api/tickle",
+                timeout=5,
+            )
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+
 def get_accounts() -> list[dict]:
     return _get("/portfolio/accounts")
 

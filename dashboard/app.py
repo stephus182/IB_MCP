@@ -98,11 +98,7 @@ def _check_gdrive():
 
 
 def _check_ibkr():
-    try:
-        ibkr_client.get_accounts()
-        st.session_state.ibkr_ready = True
-    except Exception:
-        st.session_state.ibkr_ready = False
+    st.session_state.ibkr_ready = ibkr_client.ping()
 
 
 if not st.session_state.gdrive_ready:
@@ -126,14 +122,21 @@ with top_left:
     ibkr_label = "● IBKR" if st.session_state.ibkr_ready else "✕ IBKR"
     ibkr_hint = "" if st.session_state.ibkr_ready else " — start Docker &amp; auth at https://localhost:5055"
 
-    st.markdown(
-        "<span style='color:#7c3aed;font-weight:bold;font-size:16px'>IBKR Research</span>"
-        "<span style='color:#64748b;font-size:12px;margin-left:12px'>Market Data · Analysis · Backtesting</span>"
-        "<br/>"
-        f"<span class='auth-status {gdrive_cls}'>{gdrive_label}</span>"
-        f"<span class='auth-status {ibkr_cls}'>{ibkr_label}{ibkr_hint}</span>",
-        unsafe_allow_html=True,
-    )
+    status_col, retry_col = st.columns([5, 1])
+    with status_col:
+        st.markdown(
+            "<span style='color:#7c3aed;font-weight:bold;font-size:16px'>IBKR Research</span>"
+            "<span style='color:#64748b;font-size:12px;margin-left:12px'>Market Data · Analysis · Backtesting</span>"
+            "<br/>"
+            f"<span class='auth-status {gdrive_cls}'>{gdrive_label}</span>"
+            f"<span class='auth-status {ibkr_cls}'>{ibkr_label}{ibkr_hint}</span>",
+            unsafe_allow_html=True,
+        )
+    with retry_col:
+        if not st.session_state.ibkr_ready and st.button("↺ Retry IBKR", key="retry_ibkr"):
+            _check_ibkr()
+            st.rerun()
+
 with top_right:
     mode = st.radio(
         "View",

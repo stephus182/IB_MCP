@@ -2,6 +2,11 @@
 
 Personal trading research environment: market data access, strategy backtesting, and analysis via Claude AI. Built on top of the [IB_MCP](https://github.com/rcontesti/IB_MCP) open-source IBKR MCP server.
 
+## Conventions
+
+- **Package manager**: Always use Homebrew (`brew install`) for macOS tooling — Python, Docker, CLI tools, etc. Use `pip install -r requirements.txt` only for project-scoped Python dependencies.
+- **Python**: Install via `brew install python` (targets Python 3.12+). Do not use the system Python 3.9.
+
 ## Quick Start
 
 ### 1. Start the IBKR Docker stack
