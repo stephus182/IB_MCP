@@ -55,12 +55,12 @@ def get_market_snapshot(conids: list[int], fields: list[str] = None) -> list[dic
 def ping() -> bool:
     """Check: is the IBKR gateway reachable and session active?"""
     try:
-        resp = _session.post(f"{IBKR_GATEWAY_URL}/tickle", timeout=5)
-        if resp.status_code != 200:
+        # auth/status returns 200 + JSON when logged in, 401 when not
+        resp = _session.get(f"{IBKR_GATEWAY_URL}/iserver/auth/status", timeout=5)
+        if resp.status_code == 401:
             return False
         data = resp.json()
-        # iserver.authStatus.authenticated == True means session is live
-        return data.get("iserver", {}).get("authStatus", {}).get("authenticated", False)
+        return data.get("authenticated", False)
     except Exception:
         return False
 
