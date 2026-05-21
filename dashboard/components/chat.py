@@ -100,50 +100,72 @@ When you mention a specific ticker symbol (e.g. AAPL, TSLA), the TradingView cha
 def _execute_tool(name: str, inputs: dict) -> tuple[str, object]:
     """Execute a tool call and return (text_result, optional_plotly_fig)."""
     if name == "check_cache":
-        hit = gdrive_cache.check_cache(
-            inputs["symbol"], inputs["timeframe"], inputs["start"], inputs["end"]
-        )
-        return f"Cache {'HIT' if hit else 'MISS'} for {inputs['symbol']} {inputs['timeframe']} {inputs['start']}–{inputs['end']}", None
+        try:
+            hit = gdrive_cache.check_cache(
+                inputs["symbol"], inputs["timeframe"], inputs["start"], inputs["end"]
+            )
+            return f"Cache {'HIT' if hit else 'MISS'} for {inputs['symbol']} {inputs['timeframe']} {inputs['start']}–{inputs['end']}", None
+        except Exception as e:
+            return f"Cache check error: {e}", None
 
     if name == "fetch_market_data":
         symbol = inputs["symbol"].upper()
         period = inputs["period"]
         bar = inputs.get("bar", "1d")
         end = inputs.get("end_date", str(date.today()))
-        timeframe = bar.upper().replace("MIN", "MIN")
+        timeframe = bar.upper()
 
-        if gdrive_cache.check_cache(symbol, timeframe, period, end):
-            df = gdrive_cache.load_cache(symbol, timeframe, period, end)
+        try:
+            if gdrive_cache.check_cache(symbol, timeframe, period, end):
+                df = gdrive_cache.load_cache(symbol, timeframe, period, end)
+                return (
+                    f"Loaded {symbol} {timeframe} ({period}) from Drive cache. "
+                    f"{len(df)} bars from {df.index[0].date()} to {df.index[-1].date()}.",
+                    None,
+                )
+        except Exception as e:
+            return f"Cache error for {symbol}: {e}", None
+
+        try:
+            contracts = ibkr_client.search_contract(symbol)
+        except Exception as e:
+            return f"IBKR contract search failed for {symbol}: {e}", None
+
+        if not contracts:
+            return f"No contract found for {symbol} — is IBKR connected and authenticated?", None
+
+        conid = contracts[0].get("conid") or contracts[0].get("con_id")
+        if not conid:
+            return f"Contract found for {symbol} but conid missing: {contracts[0]}", None
+
+        try:
+            raw = ibkr_client.get_market_data_history(conid, period=period, bar=bar)
+        except Exception as e:
+            return f"IBKR history fetch failed for {symbol} (conid={conid}): {e}", None
+
+        data = raw.get("data", [])
+        if not data:
             return (
-                f"Loaded {symbol} {timeframe} ({period}) from Drive cache. "
-                f"{len(df)} bars from {df.index[0].date()} to {df.index[-1].date()}. "
-                f"Columns: {list(df.columns)}. Stored as '{symbol}_{timeframe}_{period}_{end}'.",
+                f"IBKR returned no data for {symbol} (conid={conid}, period={period}, bar={bar}). "
+                f"Raw response: {raw}",
                 None,
             )
 
-        contracts = ibkr_client.search_contract(symbol)
-        if not contracts:
-            return f"Could not find contract for symbol {symbol}.", None
-        conid = contracts[0].get("conid") or contracts[0].get("con_id")
+        try:
+            df = pd.DataFrame(data)
+            df["t"] = pd.to_datetime(df["t"], unit="ms")
+            df = df.rename(columns={"t": "date", "o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"})
+            df = df.set_index("date").sort_index()
 
-        raw = ibkr_client.get_market_data_history(conid, period=period, bar=bar)
-        data = raw.get("data", [])
-        if not data:
-            return f"IBKR returned no data for {symbol} period={period} bar={bar}.", None
-
-        df = pd.DataFrame(data)
-        df["t"] = pd.to_datetime(df["t"], unit="ms")
-        df = df.rename(columns={"t": "date", "o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"})
-        df = df.set_index("date").sort_index()
-
-        start_str = str(df.index[0].date())
-        gdrive_cache.save_cache(df, symbol, timeframe, start_str, end)
-        return (
-            f"Fetched {symbol} {timeframe} ({period}) from IBKR. "
-            f"{len(df)} bars from {start_str} to {df.index[-1].date()}. "
-            f"Cached to Drive as '{symbol}_{timeframe}_{start_str}_{end}'.",
-            None,
-        )
+            gdrive_cache.save_cache(df, symbol, timeframe, period, end)
+            return (
+                f"Fetched {symbol} {timeframe} ({period}) from IBKR: "
+                f"{len(df)} bars from {df.index[0].date()} to {df.index[-1].date()}. "
+                f"Saved to Drive cache.",
+                None,
+            )
+        except Exception as e:
+            return f"Error processing/caching {symbol} data: {e}", None
 
     if name == "run_backtest":
         symbol = inputs["symbol"].upper()
@@ -155,8 +177,14 @@ def _execute_tool(name: str, inputs: dict) -> tuple[str, object]:
             df = gdrive_cache.load_cache(symbol, timeframe, start, end)
         except FileNotFoundError:
             return f"No cached data for {symbol} {timeframe} {start}–{end}. Fetch the data first.", None
+        except Exception as e:
+            return f"Error loading cached data for {symbol}: {e}", None
 
-        result = backtest.run_backtest(inputs["code"], df)
+        try:
+            result = backtest.run_backtest(inputs["code"], df)
+        except Exception as e:
+            return f"Backtest execution error: {e}", None
+
         if "error" in result:
             return f"Backtest error: {result['error']}", None
 
@@ -225,20 +253,17 @@ def render_chat(on_symbol_change=None):
                     tool_calls = []
                     for event in stream:
                         if hasattr(event, "type"):
-                            if event.type == "content_block_delta":
-                                delta = getattr(event.delta, "text", "")
-                                full_response += delta
-                                placeholder.markdown(full_response + "▌")
-                            elif event.type == "content_block_start":
+                            if event.type == "content_block_start":
                                 if getattr(event.content_block, "type", "") == "tool_use":
                                     tool_calls.append({
                                         "id": event.content_block.id,
                                         "name": event.content_block.name,
-                                        "input": "",
                                     })
                             elif event.type == "content_block_delta":
-                                if tool_calls and hasattr(event.delta, "partial_json"):
-                                    tool_calls[-1]["input"] += event.delta.partial_json
+                                delta = event.delta
+                                if hasattr(delta, "text") and delta.text:
+                                    full_response += delta.text
+                                    placeholder.markdown(full_response + "▌")
 
                     final = stream.get_final_message()
 
