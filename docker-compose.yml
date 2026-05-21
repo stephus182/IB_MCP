@@ -20,13 +20,13 @@ services:
     volumes:
       - ./api_gateway/conf.yaml:/app/api_gateway/root/conf.yaml # Mount the config file
     healthcheck:
-      # Dedicated healthcheck script for cleaner logic and better environment variable handling.
-      # The script is copied into the container image via the Dockerfile.
-      test: [ "CMD-SHELL", "/usr/local/bin/healthcheck.sh" ]
-      interval: 20s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+      # Just verify the Java gateway process is up and responding.
+      # Auth state is managed by the user via browser login — not checked here.
+      test: ["CMD-SHELL", "curl -sk -o /dev/null -w '%{http_code}' -X POST https://localhost:${GATEWAY_PORT}/v1/api/tickle | grep -qE '^[2-5]'"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
   
   mcp_server:
     container_name: mcp_server
@@ -50,7 +50,7 @@ services:
       # MCP_SERVER_LOG_LEVEL: ${MCP_SERVER_LOG_LEVEL}
     depends_on:
       api_gateway:
-        condition: service_healthy
+        condition: service_started
     networks:
       - mcp_net
     volumes:

@@ -11,6 +11,8 @@ RUN apt-get update && apt-get install -y \
 
 # Copy uv files first for better caching
 COPY pyproject.toml ./
+# uv.lock is optional — if present, pins exact versions; removed to force fresh resolution
+COPY uv.lock* ./
 
 
 # Copy the server code
