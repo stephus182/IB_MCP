@@ -1,6 +1,6 @@
 #!/bin/bash
 # Start the full IBKR research stack.
-# Run from repo root: ./start.sh
+# Run from anywhere: ibkr_mcp
 
 set -e
 cd "$(dirname "$0")"
@@ -20,10 +20,11 @@ for i in $(seq 1 30); do
 done
 echo ""
 
-echo "▶ Gateway is up. Now log in:"
+echo "▶ Opening IBKR login page..."
+open https://localhost:5055
+
 echo ""
-echo "  → Open https://localhost:5055 in your browser"
-echo "  → Enter your IBKR credentials and complete 2FA"
+echo "  → Log in with your IBKR credentials in the browser that just opened"
 echo ""
 echo "Press Enter once you have logged in..."
 read -r
@@ -31,4 +32,5 @@ read -r
 echo "▶ Starting dashboard..."
 pkill -f "streamlit run" 2>/dev/null || true
 sleep 1
+open http://localhost:8501
 streamlit run dashboard/app.py
