@@ -50,7 +50,7 @@ echo "▶ Starting dashboard..."
 pkill -f "streamlit run" 2>/dev/null || true
 sleep 1
 
-streamlit run dashboard/app.py &
+streamlit run dashboard/app.py --server.headless true &
 STREAMLIT_PID=$!
 
 echo "  Waiting for dashboard to be ready..."
