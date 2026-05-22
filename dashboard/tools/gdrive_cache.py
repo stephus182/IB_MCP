@@ -25,10 +25,8 @@ from config import (
 )
 
 _service = None
-_cache_folder_id: str | None = None
 _manifest: dict = {}
 _MANIFEST_NAME = "manifest.json"
-_CACHE_SUBFOLDER = "IBKR_cache"
 
 
 def _get_service():
@@ -54,53 +52,13 @@ def _get_service():
     return _service
 
 
-def _get_cache_folder_id() -> str:
-    """Return the ID of IBKR_cache subfolder, creating it if needed."""
-    global _cache_folder_id
-    if _cache_folder_id:
-        return _cache_folder_id
-
-    svc = _get_service()
-    results = (
-        svc.files()
-        .list(
-            q=(
-                f"name='{_CACHE_SUBFOLDER}' "
-                f"and '{GOOGLE_DRIVE_FOLDER_ID}' in parents "
-                f"and mimeType='application/vnd.google-apps.folder' "
-                f"and trashed=false"
-            ),
-            fields="files(id)",
-        )
-        .execute()
-    )
-    files = results.get("files", [])
-    if files:
-        _cache_folder_id = files[0]["id"]
-    else:
-        folder = (
-            svc.files()
-            .create(
-                body={
-                    "name": _CACHE_SUBFOLDER,
-                    "mimeType": "application/vnd.google-apps.folder",
-                    "parents": [GOOGLE_DRIVE_FOLDER_ID],
-                },
-                fields="id",
-            )
-            .execute()
-        )
-        _cache_folder_id = folder["id"]
-    return _cache_folder_id
-
-
 def _load_manifest() -> dict:
     global _manifest
     svc = _get_service()
     results = (
         svc.files()
         .list(
-            q=f"name='{_MANIFEST_NAME}' and '{_get_cache_folder_id()}' in parents and trashed=false",
+            q=f"name='{_MANIFEST_NAME}' and '{GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed=false",
             fields="files(id)",
         )
         .execute()
@@ -129,7 +87,7 @@ def _save_manifest():
     results = (
         svc.files()
         .list(
-            q=f"name='{_MANIFEST_NAME}' and '{_get_cache_folder_id()}' in parents and trashed=false",
+            q=f"name='{_MANIFEST_NAME}' and '{GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed=false",
             fields="files(id)",
         )
         .execute()
@@ -138,7 +96,7 @@ def _save_manifest():
     if files:
         svc.files().update(fileId=files[0]["id"], media_body=media).execute()
     else:
-        metadata = {"name": _MANIFEST_NAME, "parents": [_get_cache_folder_id()]}
+        metadata = {"name": _MANIFEST_NAME, "parents": [GOOGLE_DRIVE_FOLDER_ID]}
         svc.files().create(body=metadata, media_body=media, fields="id").execute()
 
 
@@ -174,7 +132,7 @@ def load_cache(symbol: str, timeframe: str, start: str, end: str) -> pd.DataFram
     results = (
         svc.files()
         .list(
-            q=f"name='{fname}' and '{_get_cache_folder_id()}' in parents and trashed=false",
+            q=f"name='{fname}' and '{GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed=false",
             fields="files(id)",
         )
         .execute()
@@ -206,7 +164,7 @@ def save_cache(df: pd.DataFrame, symbol: str, timeframe: str, start: str, end: s
     results = (
         svc.files()
         .list(
-            q=f"name='{fname}' and '{_get_cache_folder_id()}' in parents and trashed=false",
+            q=f"name='{fname}' and '{GOOGLE_DRIVE_FOLDER_ID}' in parents and trashed=false",
             fields="files(id)",
         )
         .execute()
@@ -215,7 +173,7 @@ def save_cache(df: pd.DataFrame, symbol: str, timeframe: str, start: str, end: s
     if existing:
         svc.files().update(fileId=existing[0]["id"], media_body=media).execute()
     else:
-        metadata = {"name": fname, "parents": [_get_cache_folder_id()]}
+        metadata = {"name": fname, "parents": [GOOGLE_DRIVE_FOLDER_ID]}
         svc.files().create(body=metadata, media_body=media, fields="id").execute()
 
     _load_manifest()
