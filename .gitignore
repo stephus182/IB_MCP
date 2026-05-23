@@ -182,6 +182,13 @@ dashboard/credentials.json
 dashboard/credential.json
 dashboard/token.json
 
+# Runtime files
+.streamlit.pid
+.streamlit.log
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
+
 # Superpowers brainstorming
 .superpowers/
 
