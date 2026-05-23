@@ -92,13 +92,15 @@ fi
 [ "$AUTHED" = "1" ] && echo "  ✔ IBKR session active."
 echo ""
 
-# ── 5. Start Streamlit in background, open dashboard once it's ready ──────────
+# ── 5. Start Streamlit as a detached daemon ───────────────────────────────────
 echo "▶ Starting dashboard..."
 pkill -f "streamlit run" 2>/dev/null || true
 sleep 1
 
-.venv/bin/streamlit run dashboard/app.py --server.headless true &
-STREAMLIT_PID=$!
+REPO_DIR="$(pwd)"
+nohup .venv/bin/streamlit run dashboard/app.py --server.headless true \
+  > "$REPO_DIR/.streamlit.log" 2>&1 &
+echo $! > "$REPO_DIR/.streamlit.pid"
 
 echo "  Waiting for dashboard to be ready..."
 for i in $(seq 1 20); do
@@ -113,5 +115,5 @@ echo ""
 echo "▶ Opening dashboard..."
 open -a "Google Chrome" http://localhost:8501
 echo ""
-echo "  Dashboard is running. Press Ctrl+C to stop."
-wait $STREAMLIT_PID
+echo "  Dashboard is running in the background."
+echo "  Run 'ibkr_stop' to shut it down."
