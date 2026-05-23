@@ -17,9 +17,14 @@ if ! docker info > /dev/null 2>&1; then
   echo "  Docker is ready."
 fi
 
-# ── 2. Start containers ───────────────────────────────────────────────────────
-echo "▶ Starting Docker containers..."
-docker-compose up -d
+# ── 2. Start containers (always restart if already running for clean gateway state) ──
+if docker-compose ps | grep -q "Up"; then
+  echo "▶ Restarting Docker containers (clean gateway session)..."
+  docker-compose restart
+else
+  echo "▶ Starting Docker containers..."
+  docker-compose up -d
+fi
 echo ""
 
 # ── 3. Wait for gateway process to be reachable ───────────────────────────────
