@@ -12,6 +12,6 @@ IBKR_GATEWAY_URL = (
 )
 ANTHROPIC_MODEL = "claude-sonnet-4-6"
 
-GDRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
+GDRIVE_SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 GDRIVE_CREDENTIALS_FILE = Path(__file__).parent / "credential.json"
 GDRIVE_TOKEN_FILE = Path(__file__).parent / "token.json"

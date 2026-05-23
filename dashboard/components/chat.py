@@ -47,10 +47,10 @@ TOOLS = [
             "properties": {
                 "symbol": {"type": "string"},
                 "timeframe": {"type": "string", "description": "e.g. '1D', '1H'"},
-                "start": {"type": "string"},
-                "end": {"type": "string"},
+                "period": {"type": "string", "description": "e.g. '1Y', '6M' — must match what was used in fetch_market_data"},
+                "end": {"type": "string", "description": "End date YYYY-MM-DD, defaults to today"},
             },
-            "required": ["symbol", "timeframe", "start", "end"],
+            "required": ["symbol", "timeframe", "period", "end"],
         },
     },
     {
@@ -66,11 +66,11 @@ TOOLS = [
             "properties": {
                 "code": {"type": "string", "description": "Python strategy code"},
                 "symbol": {"type": "string", "description": "Symbol the data was fetched for"},
-                "timeframe": {"type": "string"},
-                "start": {"type": "string"},
-                "end": {"type": "string"},
+                "timeframe": {"type": "string", "description": "e.g. '1D' — must match what was used in fetch_market_data"},
+                "period": {"type": "string", "description": "e.g. '1Y', '6M' — must match what was used in fetch_market_data"},
+                "end": {"type": "string", "description": "End date YYYY-MM-DD used in fetch_market_data"},
             },
-            "required": ["code", "symbol", "timeframe", "start", "end"],
+            "required": ["code", "symbol", "timeframe", "period", "end"],
         },
     },
     {
@@ -102,9 +102,9 @@ def _execute_tool(name: str, inputs: dict) -> tuple[str, object]:
     if name == "check_cache":
         try:
             hit = gdrive_cache.check_cache(
-                inputs["symbol"], inputs["timeframe"], inputs["start"], inputs["end"]
+                inputs["symbol"], inputs["timeframe"], inputs["period"], inputs["end"]
             )
-            return f"Cache {'HIT' if hit else 'MISS'} for {inputs['symbol']} {inputs['timeframe']} {inputs['start']}–{inputs['end']}", None
+            return f"Cache {'HIT' if hit else 'MISS'} for {inputs['symbol']} {inputs['timeframe']} {inputs['period']}–{inputs['end']}", None
         except Exception as e:
             return f"Cache check error: {e}", None
 
@@ -170,13 +170,13 @@ def _execute_tool(name: str, inputs: dict) -> tuple[str, object]:
     if name == "run_backtest":
         symbol = inputs["symbol"].upper()
         timeframe = inputs["timeframe"]
-        start = inputs["start"]
+        period = inputs["period"]
         end = inputs["end"]
 
         try:
-            df = gdrive_cache.load_cache(symbol, timeframe, start, end)
+            df = gdrive_cache.load_cache(symbol, timeframe, period, end)
         except FileNotFoundError:
-            return f"No cached data for {symbol} {timeframe} {start}–{end}. Fetch the data first.", None
+            return f"No cached data for {symbol} {timeframe} {period}–{end}. Fetch the data first.", None
         except Exception as e:
             return f"Error loading cached data for {symbol}: {e}", None
 
@@ -242,55 +242,61 @@ def render_chat(on_symbol_change=None):
         with st.chat_message("assistant"):
             placeholder = st.empty()
 
-            while True:
-                with _client.messages.stream(
-                    model=ANTHROPIC_MODEL,
-                    max_tokens=4096,
-                    system=SYSTEM_PROMPT,
-                    tools=TOOLS,
-                    messages=api_messages,
-                ) as stream:
-                    tool_calls = []
-                    for event in stream:
-                        if hasattr(event, "type"):
-                            if event.type == "content_block_start":
-                                if getattr(event.content_block, "type", "") == "tool_use":
-                                    tool_calls.append({
-                                        "id": event.content_block.id,
-                                        "name": event.content_block.name,
-                                    })
-                            elif event.type == "content_block_delta":
-                                delta = event.delta
-                                if hasattr(delta, "text") and delta.text:
-                                    full_response += delta.text
-                                    placeholder.markdown(full_response + "▌")
+            try:
+                while True:
+                    with _client.messages.stream(
+                        model=ANTHROPIC_MODEL,
+                        max_tokens=4096,
+                        system=SYSTEM_PROMPT,
+                        tools=TOOLS,
+                        messages=api_messages,
+                    ) as stream:
+                        tool_calls = []
+                        for event in stream:
+                            if hasattr(event, "type"):
+                                if event.type == "content_block_start":
+                                    if getattr(event.content_block, "type", "") == "tool_use":
+                                        tool_calls.append({
+                                            "id": event.content_block.id,
+                                            "name": event.content_block.name,
+                                        })
+                                elif event.type == "content_block_delta":
+                                    delta = event.delta
+                                    if hasattr(delta, "text") and delta.text:
+                                        full_response += delta.text
+                                        placeholder.markdown(full_response + "▌")
 
-                    final = stream.get_final_message()
+                        final = stream.get_final_message()
 
-                if not tool_calls:
-                    break
+                    if not tool_calls:
+                        break
 
-                tool_results = []
-                for tc in final.content:
-                    if tc.type != "tool_use":
-                        continue
-                    text, fig = _execute_tool(tc.name, tc.input)
-                    if fig:
-                        figs.append(fig)
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tc.id,
-                        "content": text,
-                    })
+                    tool_results = []
+                    for tc in final.content:
+                        if tc.type != "tool_use":
+                            continue
+                        text, fig = _execute_tool(tc.name, tc.input)
+                        if fig:
+                            figs.append(fig)
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tc.id,
+                            "content": text,
+                        })
 
-                    if on_symbol_change and tc.name == "fetch_market_data":
-                        on_symbol_change(tc.input.get("symbol", "").upper())
+                        if on_symbol_change and tc.name == "fetch_market_data":
+                            on_symbol_change(tc.input.get("symbol", "").upper())
 
-                api_messages.append({"role": "assistant", "content": final.content})
-                api_messages.append({"role": "user", "content": tool_results})
+                    api_messages.append({"role": "assistant", "content": final.content})
+                    api_messages.append({"role": "user", "content": tool_results})
 
-                if final.stop_reason != "tool_use":
-                    break
+                    if final.stop_reason != "tool_use":
+                        break
+
+            except anthropic.APIError as e:
+                err = f"Anthropic API error: {e}. Please try again."
+                placeholder.markdown(err)
+                full_response = err
 
         placeholder.markdown(full_response)
         st.session_state.messages.append({"role": "assistant", "content": full_response})

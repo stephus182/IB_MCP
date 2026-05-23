@@ -1,4 +1,4 @@
-import streamlit.components.v1 as components
+import streamlit as st
 
 
 def tradingview_chart(symbol: str = "AAPL", height: int = 600):
@@ -63,4 +63,4 @@ def tradingview_chart(symbol: str = "AAPL", height: int = 600):
     </body>
     </html>
     """
-    components.html(html, height=height, scrolling=False)
+    st.iframe(html, height=height)

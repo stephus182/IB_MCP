@@ -7,7 +7,8 @@ Index:  manifest.json in the same folder.
 """
 import io
 import json
-from datetime import date, datetime, timedelta
+import time
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -26,6 +27,8 @@ from config import (
 
 _service = None
 _manifest: dict = {}
+_manifest_loaded_at: float = 0.0
+_MANIFEST_TTL = 60.0  # seconds before re-fetching manifest from Drive
 _MANIFEST_NAME = "manifest.json"
 
 
@@ -53,7 +56,9 @@ def _get_service():
 
 
 def _load_manifest() -> dict:
-    global _manifest
+    global _manifest, _manifest_loaded_at
+    if _manifest and (time.monotonic() - _manifest_loaded_at) < _MANIFEST_TTL:
+        return _manifest
     svc = _get_service()
     results = (
         svc.files()
@@ -66,6 +71,7 @@ def _load_manifest() -> dict:
     files = results.get("files", [])
     if not files:
         _manifest = {}
+        _manifest_loaded_at = time.monotonic()
         return _manifest
 
     file_id = files[0]["id"]
@@ -75,6 +81,7 @@ def _load_manifest() -> dict:
     while not done:
         _, done = downloader.next_chunk()
     _manifest = json.loads(buf.getvalue())
+    _manifest_loaded_at = time.monotonic()
     return _manifest
 
 
@@ -116,11 +123,12 @@ def check_cache(symbol: str, timeframe: str, start: str, end: str) -> bool:
     if not entry:
         return False
     cached_end = datetime.strptime(entry["end"], "%Y-%m-%d").date()
-    if end == "today":
-        stale = cached_end < date.today() - timedelta(days=1)
-    else:
-        stale = False
-    return not stale
+    today = date.today()
+    # Treat both literal "today" and today's ISO date string as a live-end request
+    if end in ("today", str(today)):
+        stale = cached_end < today - timedelta(days=1)
+        return not stale
+    return True
 
 
 def load_cache(symbol: str, timeframe: str, start: str, end: str) -> pd.DataFrame:
@@ -183,6 +191,6 @@ def save_cache(df: pd.DataFrame, symbol: str, timeframe: str, start: str, end: s
         "start": start,
         "end": end if end != "today" else str(date.today()),
         "rows": len(df),
-        "cached_at": datetime.utcnow().isoformat(),
+        "cached_at": datetime.now(tz=timezone.utc).isoformat(),
     }
     _save_manifest()

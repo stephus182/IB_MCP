@@ -18,6 +18,7 @@ from RestrictedPython.Guards import (
     guarded_unpack_sequence,
     safe_builtins,
 )
+from RestrictedPython.PrintCollector import PrintCollector
 
 _ALLOWED_IMPORTS = {"pandas", "numpy", "plotly", "plotly.graph_objects"}
 
@@ -33,6 +34,16 @@ def _build_globals(df: pd.DataFrame) -> dict:
     glb = safe_globals.copy()
     glb["__builtins__"] = safe_builtins.copy()
     glb["__builtins__"]["__import__"] = _safe_import
+    glb["__builtins__"].update({
+        "list": list, "dict": dict, "set": set, "tuple": tuple,
+        "min": min, "max": max, "sum": sum,
+        "enumerate": enumerate, "map": map, "filter": filter,
+        "any": any, "all": all, "type": type, "sorted": sorted,
+        "reversed": reversed, "round": round, "abs": abs,
+        "isinstance": isinstance, "len": len,
+    })
+    glb["_write_"] = lambda x: x  # allow item/attribute assignment inside sandboxed code
+    glb["_print_"] = PrintCollector  # RestrictedPython routes print() through this
     glb["_getiter_"] = iter
     glb["_getattr_"] = getattr
     glb["_getitem_"] = lambda obj, key: obj[key]
@@ -49,9 +60,8 @@ def run_backtest(code: str, df: pd.DataFrame) -> dict[str, Any]:
     """
     Execute strategy code against df. Returns metrics dict.
 
-    Expected: code sets a `signals` Series (1=long, 0=flat, -1=short)
-    or a `positions` column on df. If neither found, infers from
-    `df['signal']` if present.
+    The code MUST assign df['signal'] directly (1=long, 0=flat, -1=short).
+    Returns {'error': ...} on failure, or metrics + 'equity_curve' Plotly fig.
     """
     try:
         byte_code = compile_restricted(code, "<backtest>", "exec")
@@ -80,7 +90,8 @@ def _compute_metrics(df: pd.DataFrame) -> dict[str, Any]:
 
     total_return = float(df["equity"].iloc[-1] - 1)
     daily_std = df["strategy_returns"].std()
-    sharpe = float((df["strategy_returns"].mean() / daily_std * (252**0.5)) if daily_std else 0)
+    sharpe_raw = (df["strategy_returns"].mean() / daily_std * (252**0.5)) if daily_std else 0.0
+    sharpe = float(sharpe_raw) if sharpe_raw == sharpe_raw else 0.0  # guard NaN
     rolling_max = df["equity"].cummax()
     drawdown = (df["equity"] - rolling_max) / rolling_max
     max_drawdown = float(drawdown.min())

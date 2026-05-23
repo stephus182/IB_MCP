@@ -136,6 +136,9 @@ with top_left:
         if not st.session_state.ibkr_ready and st.button("↺ Retry IBKR", key="retry_ibkr"):
             _check_ibkr()
             st.rerun()
+        if not st.session_state.gdrive_ready and st.button("↺ Retry Drive", key="retry_gdrive"):
+            _check_gdrive()
+            st.rerun()
 
 with top_right:
     mode = st.radio(
