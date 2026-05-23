@@ -293,12 +293,16 @@ def render_chat(on_symbol_change=None):
                     if final.stop_reason != "tool_use":
                         break
 
-            except anthropic.APIError as e:
-                err = f"Anthropic API error: {e}. Please try again."
-                placeholder.markdown(err)
-                full_response = err
+            except Exception as e:
+                import traceback, sys
+                print(f"[chat] exception in stream loop: {e}", file=sys.stderr)
+                traceback.print_exc(file=sys.stderr)
+                err = f"Error: {e}. Please try again."
+                if not full_response:
+                    full_response = err
 
-        placeholder.markdown(full_response)
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
-        st.session_state.pending_figs = figs
-        st.rerun()
+            finally:
+                placeholder.markdown(full_response)
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+                st.session_state.pending_figs = figs
+                st.rerun()
