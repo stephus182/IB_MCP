@@ -9,17 +9,19 @@ _session.verify = False  # gateway uses self-signed cert
 
 
 def _load_chrome_cookies():
-    """Inject Chrome's authenticated IBKR session cookies into the shared session."""
+    """Inject Chrome's IBKR session cookies into the shared session as a raw header.
+
+    requests silently drops cookies set for 'localhost' via the cookie jar,
+    so we build the Cookie header manually instead.
+    """
     try:
         import browser_cookie3
         jar = browser_cookie3.chrome(domain_name="localhost")
-        loaded = 0
-        for c in jar:
-            # Only use cookies that were set for the API path (not static assets)
-            if c.path.startswith("/v1/api") or c.path == "/":
-                _session.cookies.set(c.name, c.value, domain="localhost")
-                loaded += 1
-        return loaded
+        # Collect all cookies — let the gateway decide what it needs
+        parts = [f"{c.name}={c.value}" for c in jar]
+        if parts:
+            _session.headers.update({"Cookie": "; ".join(parts)})
+        return len(parts)
     except Exception:
         return 0
 

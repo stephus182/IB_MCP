@@ -34,15 +34,62 @@ for i in $(seq 1 30); do
 done
 echo ""
 
-# ── 4. Open login page and wait for user ─────────────────────────────────────
+# ── 4. Open login page and wait for authenticated session ────────────────────
 echo "▶ Opening IBKR login page in Chrome..."
 open -a "Google Chrome" https://localhost:5055
 echo ""
-echo "  Log in with your IBKR credentials."
-echo "  Wait until the page shows your account is connected, then come back here."
+echo "  Complete the full login in Chrome:"
+echo "    1. Enter your IBKR username and password"
+echo "    2. Complete 2FA when prompted (challenge code → IBKR Mobile → response code)"
+echo "    3. Wait for the browser to show: 'Client login succeeds'"
 echo ""
-printf "Press Enter once you are logged in... "
+
+# Flush any buffered stdin so a stray Enter doesn't skip the prompt
+read -r -t 0.1 _discard 2>/dev/null || true
+
+printf "Press Enter here once Chrome shows 'Client login succeeds'... "
 read -r
+echo ""
+
+# Verify the gateway is actually authenticated before proceeding
+echo "▶ Verifying IBKR session..."
+AUTHED=0
+for i in $(seq 1 15); do
+  RESULT=$(.venv/bin/python3 -c "
+import sys; sys.path.insert(0,'dashboard')
+from tools import ibkr_client
+print('ok' if ibkr_client.ping() else 'fail')
+" 2>/dev/null)
+  if [ "$RESULT" = "ok" ]; then
+    AUTHED=1
+    break
+  fi
+  printf "."
+  sleep 2
+done
+echo ""
+
+if [ "$AUTHED" = "0" ]; then
+  echo "  ✕ Gateway not authenticated — session was not established."
+  echo "    Go back to Chrome, reload https://localhost:5055, log in again,"
+  echo "    and wait for 'Client login succeeds' before pressing Enter."
+  echo ""
+  printf "Press Enter to try verification again... "
+  read -r -t 0.1 _discard 2>/dev/null || true
+  read -r
+  echo ""
+  RESULT=$(.venv/bin/python3 -c "
+import sys; sys.path.insert(0,'dashboard')
+from tools import ibkr_client
+print('ok' if ibkr_client.ping() else 'fail')
+" 2>/dev/null)
+  if [ "$RESULT" != "ok" ]; then
+    echo "  ✕ Still not authenticated. Starting dashboard anyway — use the ↺ Retry IBKR button once logged in."
+    echo ""
+  fi
+fi
+
+[ "$AUTHED" = "1" ] && echo "  ✔ IBKR session active."
 echo ""
 
 # ── 5. Start Streamlit in background, open dashboard once it's ready ──────────
