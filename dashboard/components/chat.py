@@ -2,10 +2,20 @@
 Claude AI chat panel with tool use and streaming.
 
 Tools available to Claude:
-  - fetch_market_data   : fetch IBKR history (checks Drive cache first)
-  - check_cache         : inspect Drive manifest
-  - run_backtest        : execute strategy in sandbox
-  - get_portfolio_summary: account overview
+  - fetch_market_data       : fetch IBKR history (checks Drive cache first)
+  - check_cache             : inspect Drive manifest
+  - run_backtest            : execute strategy in sandbox
+  - get_portfolio_summary   : account summary (net liq, cash, P&L)
+  - get_positions           : all open positions
+  - get_account_overview    : summary + ledger + allocation in one call
+  - get_trades              : recent trade history (last 6 days)
+  - get_live_orders         : open/live orders
+  - get_pa_performance      : portfolio NAV performance over a period
+  - get_pa_transactions     : transaction history from Portfolio Analyst
+  - get_contract_details    : full contract info + trading rules
+  - get_option_chain        : options chain for a symbol
+  - run_scanner             : IBKR market scanner
+  - get_notifications       : IBKR FYI notifications
 """
 import json
 from datetime import date
@@ -76,25 +86,116 @@ TOOLS = [
     {
         "name": "get_portfolio_summary",
         "description": "Retrieve account summary from IBKR (net liquidation, cash, unrealized P&L).",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_positions",
+        "description": "Get all open positions for the IBKR account — symbol, quantity, market value, unrealized P&L.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_account_overview",
+        "description": "Full account overview: summary (net liq, cash, P&L) + cash ledger by currency + allocation by asset class. Use this for a complete picture of the account.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_trades",
+        "description": "Recent trade history from IBKR for the current and previous 6 days — symbol, side, quantity, price, execution time.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_live_orders",
+        "description": "All currently open/live orders in the IBKR account — symbol, order type, side, quantity, status.",
+        "input_schema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_pa_performance",
+        "description": "Portfolio Analyst NAV performance over a period (1D, 1W, 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y, ITD).",
         "input_schema": {
             "type": "object",
-            "properties": {},
+            "properties": {
+                "period": {"type": "string", "description": "Period code: 1D, 1W, 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y, or ITD", "default": "1Y"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "get_pa_transactions",
+        "description": "Transaction history from IBKR Portfolio Analyst — deposits, withdrawals, dividends, fees.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "period": {"type": "string", "description": "Period code: 1D, 1W, 1M, 3M, 6M, 1Y, 2Y, 3Y, 5Y, or ITD", "default": "1Y"},
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "get_contract_details",
+        "description": "Full contract details and trading rules for a symbol — exchange, currency, trading hours, margin requirements, available algos.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Ticker symbol, e.g. AAPL"},
+                "sec_type": {"type": "string", "description": "Security type: STK, OPT, FUT, CASH, BOND", "default": "STK"},
+            },
+            "required": ["symbol"],
+        },
+    },
+    {
+        "name": "get_option_chain",
+        "description": "Options chain for a symbol — available expirations and strikes.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {"type": "string", "description": "Underlying ticker symbol, e.g. AAPL"},
+                "exchange": {"type": "string", "description": "Exchange, e.g. CBOE (optional)"},
+            },
+            "required": ["symbol"],
+        },
+    },
+    {
+        "name": "run_scanner",
+        "description": "Run an IBKR market scanner to find stocks matching criteria (top gainers, high volume, momentum, etc.).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "scan_type": {"type": "string", "description": "Scanner type, e.g. TOP_PERC_GAIN, TOP_PERC_LOSE, MOST_ACTIVE, HIGH_VS_13W_HL, LOW_VS_13W_HL"},
+                "instrument": {"type": "string", "description": "Instrument type: STK, ETF, IND", "default": "STK"},
+                "location": {"type": "string", "description": "Market location, e.g. STK.US.MAJOR", "default": "STK.US.MAJOR"},
+            },
+            "required": ["scan_type"],
+        },
+    },
+    {
+        "name": "get_notifications",
+        "description": "Recent IBKR FYI notifications and system messages.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "max_count": {"type": "integer", "description": "Max notifications to return (default 10)", "default": 10},
+            },
             "required": [],
         },
     },
 ]
 
-SYSTEM_PROMPT = """You are a quantitative trading research assistant with direct access to Interactive Brokers market data and a Python backtesting sandbox.
+SYSTEM_PROMPT = """You are a quantitative trading research assistant with full access to Interactive Brokers data and a Python backtesting sandbox.
 
-Your primary tasks:
-1. Fetch and analyse historical market data via IBKR
-2. Write and run trading strategy backtests in Python using pandas/numpy
-3. Interpret results: equity curves, Sharpe ratios, drawdowns, trade statistics
-4. Suggest strategy improvements based on results
+Your capabilities:
+1. Market data — fetch historical OHLCV, real-time snapshots, contract details, options chains
+2. Portfolio — positions, account summary, cash ledger, allocation breakdown
+3. Trade history — recent executions, open orders, Portfolio Analyst performance and transactions
+4. Research — market scanner, FYI notifications, futures and stock contract lookups
+5. Backtesting — write and run Python strategies in a sandbox, return equity curves and metrics
 
-Always check the Drive cache before fetching new data. When writing strategy code, always set df['signal'] column (1=long, 0=flat, -1=short). Present results clearly with key metrics.
-
-When you mention a specific ticker symbol (e.g. AAPL, TSLA), the TradingView chart on the left will automatically switch to that symbol."""
+Guidelines:
+- Always check the Drive cache before fetching new data (use check_cache first)
+- For account questions, use get_account_overview for a complete picture
+- When writing strategy code, always set df['signal'] = 1 (long), 0 (flat), or -1 (short)
+- Present results clearly with key metrics in markdown tables where appropriate
+- When you mention a ticker symbol, the TradingView chart on the left auto-switches to it
+- Order placement is NOT available — this is a read-only research environment"""
 
 
 def _execute_tool(name: str, inputs: dict) -> tuple[str, object]:
@@ -208,6 +309,113 @@ def _execute_tool(name: str, inputs: dict) -> tuple[str, object]:
             return json.dumps(summary, indent=2), None
         except Exception as e:
             return f"Could not fetch portfolio summary: {e}", None
+
+    if name == "get_positions":
+        try:
+            positions = ibkr_client.get_positions()
+            if not positions:
+                return "No open positions found.", None
+            return json.dumps(positions, indent=2), None
+        except Exception as e:
+            return f"Could not fetch positions: {e}", None
+
+    if name == "get_account_overview":
+        try:
+            summary = ibkr_client.get_account_summary()
+            ledger = ibkr_client.get_account_ledger()
+            allocation = ibkr_client.get_account_allocation()
+            overview = {
+                "summary": summary,
+                "ledger": ledger,
+                "allocation": allocation,
+            }
+            return json.dumps(overview, indent=2), None
+        except Exception as e:
+            return f"Could not fetch account overview: {e}", None
+
+    if name == "get_trades":
+        try:
+            trades = ibkr_client.get_trades()
+            if not trades:
+                return "No trades found for the last 6 days.", None
+            return json.dumps(trades, indent=2), None
+        except Exception as e:
+            return f"Could not fetch trades: {e}", None
+
+    if name == "get_live_orders":
+        try:
+            orders = ibkr_client.get_live_orders()
+            if not orders:
+                return "No open orders.", None
+            return json.dumps(orders, indent=2), None
+        except Exception as e:
+            return f"Could not fetch live orders: {e}", None
+
+    if name == "get_pa_performance":
+        try:
+            period = inputs.get("period", "1Y")
+            perf = ibkr_client.get_pa_performance(period=period)
+            return json.dumps(perf, indent=2), None
+        except Exception as e:
+            return f"Could not fetch PA performance: {e}", None
+
+    if name == "get_pa_transactions":
+        try:
+            period = inputs.get("period", "1Y")
+            txns = ibkr_client.get_pa_transactions(period=period)
+            return json.dumps(txns, indent=2), None
+        except Exception as e:
+            return f"Could not fetch PA transactions: {e}", None
+
+    if name == "get_contract_details":
+        try:
+            symbol = inputs["symbol"].upper()
+            sec_type = inputs.get("sec_type", "STK")
+            contracts = ibkr_client.search_contract(symbol, sec_type)
+            if not contracts:
+                return f"No contract found for {symbol}.", None
+            conid = contracts[0].get("conid") or contracts[0].get("con_id")
+            if not conid:
+                return f"Contract found for {symbol} but conid missing.", None
+            info = ibkr_client.get_contract_info_and_rules(conid)
+            return json.dumps(info, indent=2), None
+        except Exception as e:
+            return f"Could not fetch contract details for {inputs.get('symbol', '?')}: {e}", None
+
+    if name == "get_option_chain":
+        try:
+            symbol = inputs["symbol"].upper()
+            exchange = inputs.get("exchange", "")
+            chain = ibkr_client.get_option_chain(symbol, exchange=exchange)
+            return json.dumps(chain, indent=2), None
+        except Exception as e:
+            return f"Could not fetch option chain for {inputs.get('symbol', '?')}: {e}", None
+
+    if name == "run_scanner":
+        try:
+            params = {
+                "instrument": inputs.get("instrument", "STK"),
+                "type": inputs["scan_type"],
+                "filter": [],
+                "location": inputs.get("location", "STK.US.MAJOR"),
+                "size": "25",
+            }
+            results = ibkr_client.run_iserver_scanner(params)
+            if not results:
+                return "Scanner returned no results.", None
+            return json.dumps(results[:25], indent=2), None
+        except Exception as e:
+            return f"Scanner error: {e}", None
+
+    if name == "get_notifications":
+        try:
+            max_count = inputs.get("max_count", 10)
+            notifications = ibkr_client.get_notifications(max_count=max_count)
+            unread = ibkr_client.get_unread_count()
+            result = {"unread_count": unread, "notifications": notifications}
+            return json.dumps(result, indent=2), None
+        except Exception as e:
+            return f"Could not fetch notifications: {e}", None
 
     return f"Unknown tool: {name}", None
 
